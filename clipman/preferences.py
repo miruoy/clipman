@@ -439,6 +439,23 @@ class ClipmanPreferences(Adw.Dialog):
             lambda r, _p: self._save("show_count_badges", r.get_active()),
         )
         layout_group.add(badges_row)
+
+        # Panel-menu history size (contract v9 dropdown; daemon clamps to
+        # 1-100 when it reads the value back).
+        self._menu_history_limit_row = Adw.SpinRow.new_with_range(1, 100, 1)
+        self._menu_history_limit_row.set_title(_("Panel menu history size"))
+        self._menu_history_limit_row.set_subtitle(
+            _("Number of recent clips listed in the top-bar menu.")
+        )
+        self._menu_history_limit_row.set_value(
+            self._get_int("menu_history_limit", 30)
+        )
+        self._menu_history_limit_row.connect(
+            "notify::value",
+            lambda r, _p: self._save("menu_history_limit",
+                                     int(r.get_value())),
+        )
+        layout_group.add(self._menu_history_limit_row)
         page.add(layout_group)
 
         return page

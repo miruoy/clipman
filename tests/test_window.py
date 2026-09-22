@@ -359,6 +359,29 @@ class TestWindowConstruction(_WidgetTestCase):
         prefs = ClipmanPreferences(db, parent, on_setting_changed=None)
         self.assertIsNotNone(prefs)
 
+    def test_menu_history_limit_row_reads_and_saves(self):
+        """The panel-menu row limit is user-configurable, not hardcoded."""
+        from gi.repository import Adw
+
+        from clipman.preferences import ClipmanPreferences
+        from clipman.window import ClipmanWindow
+
+        db = self._make_db()
+        app = self._make_app("com.clipman.TestMenuLimit")
+        parent = ClipmanWindow(application=app, db=db, monitor=None)
+        prefs = ClipmanPreferences(db, parent, on_setting_changed=None)
+
+        row = prefs._menu_history_limit_row
+        self.assertIsInstance(row, Adw.SpinRow)
+        self.assertEqual(int(row.get_value()), 30)  # default
+
+        row.set_value(50)
+        self.assertEqual(db.get_setting("menu_history_limit"), "50")
+
+        db.set_setting("menu_history_limit", "12")
+        prefs2 = ClipmanPreferences(db, parent, on_setting_changed=None)
+        self.assertEqual(int(prefs2._menu_history_limit_row.get_value()), 12)
+
     def test_catppuccin_palette_is_optional(self):
         """use_catppuccin gates whether the forced @-token palette is applied
         (off = follow the system GNOME theme/accent)."""
