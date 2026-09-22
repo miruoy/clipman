@@ -94,3 +94,17 @@ class ClipmanDBusService(dbus.service.Object):
         collapsed to one line and truncated so long clips stay off the bus.
         """
         return self._history_items()
+
+    @dbus.service.method(IFACE, in_signature="u", out_signature="")
+    def ActivateEntry(self, entry_id):
+        """Paste one history entry from the shell panel menu.
+
+        Delegates to the window's paste path (copy + keystroke via the
+        extension). The popup window is never shown; unknown ids are
+        dropped silently — the menu may be showing a stale row.
+        """
+        entry = self.app.db.get_entry(entry_id)
+        if entry is None:
+            logger.debug("ActivateEntry: id %s not found", entry_id)
+            return
+        self.window._paste_entry(entry)

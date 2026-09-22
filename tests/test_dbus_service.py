@@ -114,6 +114,25 @@ class _ServiceTestCase(unittest.TestCase):
         self.service = ClipmanDBusService(self.window, self.app, self.monitor)
 
 
+class TestActivateEntry(_ServiceTestCase):
+    """ActivateEntry pastes a history row from the shell menu."""
+
+    def test_known_id_pastes_via_the_window(self):
+        entry_id = self.app.db.add_entry("text", content_text="paste me")
+        self.service.ActivateEntry(entry_id)
+        args, _ = self.window._paste_entry.call_args
+        self.assertEqual(args[0]["id"], entry_id)
+        self.assertEqual(args[0]["content_text"], "paste me")
+
+    def test_unknown_id_is_a_silent_no_op(self):
+        self.service.ActivateEntry(424242)
+        self.window._paste_entry.assert_not_called()
+
+    def test_out_signature_is_empty(self):
+        self.assertEqual(
+            ClipmanDBusService.ActivateEntry._dbus_out_signature, "")
+
+
 class TestGetHistory(_ServiceTestCase):
     """GetHistory feeds the shell panel menu."""
 
