@@ -191,3 +191,33 @@ class ClipmanDBusService(dbus.service.Object):
         if self.monitor is None:
             return
         self.monitor.set_incognito(bool(paused))
+
+    # Keys the extension's prefs dialog may read and write. The window's
+    # appearance settings (theme, accent, …) stay window-only — the shell
+    # prefs dialog only exposes behaviour/privacy/history settings.
+    _PREFS_SETTING_KEYS = frozenset((
+        "menu_history_limit",
+        "show_count_badges",
+        "incognito_on_launch",
+        "sensitive_autoclear",
+        "sensitive_timeout",
+    ))
+
+    @dbus.service.method(IFACE, in_signature="s", out_signature="s")
+    def GetSetting(self, key):
+        """One app setting for the prefs dialog ('' when unset/unknown)."""
+        if key not in self._PREFS_SETTING_KEYS:
+            return ""
+        try:
+            return str(self.app.db.get_setting(key, "") or "")
+        except Exception:
+            logger.debug("GetSetting(%s) failed", key, exc_info=True)
+            return ""
+
+    @dbus.service.method(IFACE, in_signature="ss", out_signature="")
+    def SetSetting(self, key, value):
+        """Persist one prefs-dialog setting (unknown keys are dropped)."""
+        if key not in self._PREFS_SETTING_KEYS:
+            logger.debug("SetSetting rejected unknown key %s", key)
+            return
+        self.app.db.set_setting(key, str(value))

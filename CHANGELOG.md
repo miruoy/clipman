@@ -21,6 +21,13 @@ All notable changes to Clipman are documented in this file.
   `metadata.json` version is bumped.
 - New daemon D-Bus methods backing the menu: `GetHistory`,
   `ActivateEntry`, `DeleteEntry`, `ClearHistory` and `SetIncognito`.
+- The extension ships a `prefs.js`: the GNOME Extensions app (and the
+  dropdown's Preferences item, which opens it via
+  `org.gnome.Shell.Extensions.OpenExtensionPrefs`) now show a native
+  Adwaita settings page for the history and privacy settings, backed by
+  new `GetSetting`/`SetSetting` D-Bus methods with a key whitelist.
+  The dropdown falls back to the popup window when the shell prefs
+  API is unavailable.
 - The `Toggle` action (Super+V / `clipman toggle`) now opens the panel
   menu via a new authorized extension `ToggleMenu` method (contract
   version 9) and falls back to the popup window when the extension

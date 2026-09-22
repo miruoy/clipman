@@ -290,3 +290,38 @@ class TestGetHistory(_ServiceTestCase):
         self.assertEqual(len(self.service.GetHistory()), 3)
         self.app.db.set_setting("menu_history_limit", "not-a-number")
         self.assertEqual(len(self.service.GetHistory()), 3)
+
+
+class TestSettings(_ServiceTestCase):
+    """GetSetting/SetSetting expose app settings to the prefs dialog."""
+
+    def test_get_setting_returns_the_stored_value(self):
+        self.app.db.set_setting("menu_history_limit", "42")
+        self.assertEqual(self.service.GetSetting("menu_history_limit"), "42")
+
+    def test_get_setting_returns_empty_for_unset_keys(self):
+        self.assertEqual(self.service.GetSetting("show_count_badges"), "")
+
+    def test_get_setting_rejects_unknown_keys(self):
+        self.assertEqual(self.service.GetSetting("not_a_setting"), "")
+        self.app.db.set_setting("evil", "1")
+        self.assertEqual(self.service.GetSetting("evil"), "")
+
+    def test_set_setting_stores_known_keys(self):
+        self.service.SetSetting("menu_history_limit", "7")
+        self.assertEqual(self.app.db.get_setting("menu_history_limit"), "7")
+
+    def test_set_setting_rejects_unknown_keys(self):
+        self.service.SetSetting("evil", "1")
+        self.assertIsNone(self.app.db.get_setting("evil"))
+
+    def test_settings_round_trip_values_used_by_the_prefs_dialog(self):
+        for key, value in (
+            ("menu_history_limit", "30"),
+            ("show_count_badges", "true"),
+            ("incognito_on_launch", "false"),
+            ("sensitive_autoclear", "true"),
+            ("sensitive_timeout", "60"),
+        ):
+            self.service.SetSetting(key, value)
+            self.assertEqual(self.service.GetSetting(key), value)

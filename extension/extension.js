@@ -361,7 +361,7 @@ export default class ClipmanExtension extends Extension {
 
         const prefsItem = new PopupMenu.PopupMenuItem('Preferences');
         prefsItem.connect('activate', () => {
-            this._callDaemon('Show', null);
+            this._openPrefs();
         });
         this._indicator.menu.addMenuItem(prefsItem);
 
@@ -524,6 +524,32 @@ export default class ClipmanExtension extends Extension {
                 new GLib.Variant('(u)', [entryId]));
         });
         this._historySection.addMenuItem(item);
+    }
+
+    // Open the extension's prefs dialog like the Extensions app does
+    // (org.gnome.Shell.Extensions.OpenExtensionPrefs); fall back to the
+    // daemon's own window when the shell API is unavailable.
+    _openPrefs() {
+        Gio.DBus.session.call(
+            'org.gnome.Shell.Extensions',
+            '/org/gnome/Shell/Extensions',
+            'org.gnome.Shell.Extensions',
+            'OpenExtensionPrefs',
+            new GLib.Variant('(ssa{sv})', [this.uuid, '', {}]),
+            null,
+            Gio.DBusCallFlags.NONE,
+            -1,
+            null,
+            (connection, result) => {
+                try {
+                    connection.call_finish(result);
+                } catch (e) {
+                    console.debug(
+                        `clipman: OpenExtensionPrefs failed: ${e.message}`);
+                    this._callDaemon('Show', null);
+                }
+            }
+        );
     }
 
     _callDaemon(method, variant) {
