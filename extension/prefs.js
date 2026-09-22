@@ -17,9 +17,24 @@ const SETTING_DEFAULTS = {
     sensitive_timeout: 30,
 };
 
-// GNOME Shell (45+) instantiates its own Adw.PreferencesWindow and hands
-// it to fillPreferencesWindow(); everything we build must be a page
-// inside that window.
+// GNOME 50 instantiates `new prefsModule.default({...metadata, dir, path})`
+// and then calls `prefsObj.fillPreferencesWindow(window)` on the instance.
+// GNOME 45-49 instead call the module-level init()/fillPreferencesWindow()
+// functions. Support both: the default-exported class is the GNOME 50 entry
+// point, the function exports are the 45-49 entry point. Everything built
+// must be a page inside the Adw.PreferencesWindow the shell provides.
+class ClipmanPreferences {
+    constructor(metadata) {
+        this.metadata = metadata;
+    }
+
+    fillPreferencesWindow(window) {
+        window.add(new ClipmanPreferencesPage());
+    }
+}
+
+export default ClipmanPreferences;
+
 export function init() {}
 
 export function fillPreferencesWindow(window) {

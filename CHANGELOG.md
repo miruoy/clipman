@@ -35,6 +35,17 @@ All notable changes to Clipman are documented in this file.
 - `Panel menu history size` preference (1–100, default 30) controls
   how many rows the dropdown lists.
 
+### Fixed — prefs dialog failed to open on GNOME Shell 50
+
+- GNOME Shell 50 moved the extension preferences dialog into the
+  shell's D-Bus service and instantiates `new prefsModule.default(...)`
+  on the prefs module before calling `fillPreferencesWindow()` on the
+  instance; a module that only exported the 45–49 style functions
+  failed with `prefsModule.default is not a constructor`. `prefs.js`
+  now default-exports the preferences class (GNOME 50 entry point)
+  while keeping the `init()`/`fillPreferencesWindow()` function
+  exports for GNOME 45–49.
+
 ### Fixed — daemon busy-looped at ~100% CPU after showing the popup
 
 - `ClipmanWindow._present_focused()` handed
