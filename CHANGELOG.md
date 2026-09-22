@@ -7,12 +7,18 @@ All notable changes to Clipman are documented in this file.
 ### Added — panel-menu UI (GNOME top-bar dropdown)
 
 - The GNOME Shell extension now adds a permanent panel indicator whose
-  dropdown lists the recent clipboard history: one-line text previews
-  (or an image placeholder), click to paste into the focused window,
-  a per-row delete button, and footer actions for incognito, clear
-  history and preferences. Rows are refetched from the daemon on every
-  open; the daemon owns the row limit and all state, the menu is a
-  thin view.
+  dropdown lists the recent clipboard history: two-line rows with the
+  one-line text preview plus a meta line (relative time, char count for
+  text, pixel dimensions for images), a star for pinned entries, a
+  masked row with a lock icon for sensitive entries, real image
+  thumbnails, click to paste into the focused window, a per-row delete
+  button, and footer actions for incognito, clear history and
+  preferences. Rows are refetched from the daemon on every open; the
+  daemon owns the row limit and all state, the menu is a thin view.
+  The `GetHistory` D-Bus signature changed to `a(usstyuus)` (id,
+  content type, preview, timestamp, pinned/sensitive flags, char count
+  or image width/height, image path), so the extension's
+  `metadata.json` version is bumped.
 - New daemon D-Bus methods backing the menu: `GetHistory`,
   `ActivateEntry`, `DeleteEntry`, `ClearHistory` and `SetIncognito`.
 - The `Toggle` action (Super+V / `clipman toggle`) now opens the panel

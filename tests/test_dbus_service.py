@@ -173,20 +173,39 @@ class TestMenuActions(_ServiceTestCase):
 
 
 class TestGetHistory(_ServiceTestCase):
-    """GetHistory feeds the shell panel menu."""
+    """GetHistory feeds the shell panel menu.
+
+    Row shape ``(u id, s content_type, s preview, t accessed_at, y flags,
+    u detail1, u detail2, s image_path)``:
+
+    - ``content_type`` distinguishes image rows (``image`` vs ``text``).
+    - ``preview`` is the 80-char single-line text preview; empty for
+      images and sensitive entries (the menu never sees their content).
+    - ``accessed_at`` is the entry's epoch timestamp so the menu can
+      render the same relative times as the window.
+    - ``flags``: bit 0 = pinned, bit 1 = sensitive.
+    - ``detail1``/``detail2``: char count for text (detail2 always 0),
+      pixel width/height for images (0 when unknown).
+    - ``image_path`` is the stored PNG path for image rows, empty
+      otherwise and never for sensitive entries.
+    """
+
+    FLAG_PINNED = 0b01
+    FLAG_SENSITIVE = 0b10
 
     def test_out_signature_is_a_list_of_menu_items(self):
         self.assertEqual(
-            ClipmanDBusService.GetHistory._dbus_out_signature, "a(ibss)")
+            ClipmanDBusService.GetHistory._dbus_out_signature,
+            "a(usstyuus)")
 
     def test_returns_rows_newest_first(self):
         self.app.db.add_entry("text", content_text="first")
         self.app.db.add_entry("text", content_text="second")
         items = self.service.GetHistory()
         self.assertEqual(len(items), 2)
+        self.assertEqual(items[0][1], "text")
         self.assertEqual(items[0][2], "second")
         self.assertEqual(items[1][2], "first")
-        self.assertEqual(items[0][3], "text")
 
     def test_text_preview_is_single_line_and_truncated(self):
         self.app.db.add_entry("text", content_text="a\nb\tc" + "x" * 200)
@@ -196,13 +215,58 @@ class TestGetHistory(_ServiceTestCase):
         self.assertNotIn("\t", preview)
         self.assertTrue(preview.startswith("a b c"))
 
-    def test_image_rows_carry_the_flag_and_no_preview(self):
+    def test_text_rows_carry_the_char_count(self):
+        self.app.db.add_entry("text", content_text="hello")
+        _id, ctype, _preview, _ts, _flags, n_chars, detail2, image_path = (
+            self.service.GetHistory()[0])
+        self.assertEqual(ctype, "text")
+        self.assertEqual(n_chars, 5)
+        self.assertEqual(detail2, 0)
+        self.assertEqual(image_path, "")
+
+    def test_rows_carry_the_accessed_timestamp(self):
+        self.app.db.add_entry("text", content_text="stamped")
+        ts = self.service.GetHistory()[0][3]
+        self.assertIsInstance(ts, int)
+        self.assertGreater(ts, 0)
+        entry = self.app.db.get_entries()[0]
+        self.assertEqual(ts, int(entry["accessed_at"]))
+
+    def test_image_rows_carry_dims_and_path(self):
         self.app.db.add_entry("image", image_data=b"\x89PNG fake")
-        entry_id, is_image, preview, content_type = self.service.GetHistory()[0]
-        self.assertTrue(is_image)
+        row = self.service.GetHistory()[0]
+        _id, ctype, preview, _ts, _flags, width, height, image_path = row
+        self.assertEqual(ctype, "image")
         self.assertEqual(preview, "")
-        self.assertEqual(content_type, "image")
-        self.assertEqual(entry_id, self.app.db.get_entries()[0]["id"])
+        # The fake PNG is undecodable, so the dims are unknown but present.
+        self.assertEqual((width, height), (0, 0))
+        self.assertTrue(image_path.endswith(".png"))
+        self.assertIn(str(self.data_dir / "images"), image_path)
+
+    def test_pinned_rows_set_the_pinned_flag(self):
+        entry_id = self.app.db.add_entry("text", content_text="pinned")
+        self.app.db.toggle_pin(entry_id)
+        _id, _ctype, _preview, _ts, flags, _n, _d2, _path = (
+            self.service.GetHistory()[0])
+        self.assertTrue(flags & self.FLAG_PINNED)
+
+    def test_sensitive_rows_are_masked(self):
+        self.app.db.add_entry("text", content_text="secret", sensitive=True)
+        _id, ctype, preview, _ts, flags, _n, _d2, _path = (
+            self.service.GetHistory()[0])
+        self.assertEqual(ctype, "text")
+        self.assertEqual(preview, "")
+        self.assertTrue(flags & self.FLAG_SENSITIVE)
+
+    def test_sensitive_images_hide_the_thumbnail_path(self):
+        self.app.db.add_entry(
+            "image", image_data=b"\x89PNG fake", sensitive=True)
+        _id, ctype, preview, _ts, flags, _w, _h, image_path = (
+            self.service.GetHistory()[0])
+        self.assertEqual(ctype, "image")
+        self.assertEqual(preview, "")
+        self.assertTrue(flags & self.FLAG_SENSITIVE)
+        self.assertEqual(image_path, "")
 
     def test_limit_comes_from_the_menu_history_limit_setting(self):
         for i in range(5):

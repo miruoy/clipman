@@ -381,7 +381,7 @@ export default class ClipmanExtension extends Extension {
             DAEMON_BUS_NAME,
             'GetHistory',
             null,
-            new GLib.VariantType('(a(ibss))'),
+            new GLib.VariantType('(a(usstyuus))'),
             Gio.DBusCallFlags.NO_AUTO_START,
             -1,
             null,
@@ -412,13 +412,93 @@ export default class ClipmanExtension extends Extension {
         this._historySection.addMenuItem(item);
     }
 
-    _addHistoryRow([entryId, isImage, preview, _contentType]) {
+    // Menu-row flags from the daemon's GetHistory struct (y field).
+    static FLAG_PINNED = 0b01;
+    static FLAG_SENSITIVE = 0b10;
+
+    // Same relative times as the GTK window (_format_time).
+    _formatMenuTime(ts) {
+        const diff = (Date.now() / 1000) - ts;
+        if (diff < 60)
+            return 'just now';
+        if (diff < 3600)
+            return `${Math.floor(diff / 60)}m ago`;
+        if (diff < 86400)
+            return `${Math.floor(diff / 3600)}h ago`;
+        return `${Math.floor(diff / 86400)}d ago`;
+    }
+
+    _menuRowTitle(preview, contentType, sensitive) {
+        if (sensitive)
+            return 'Sensitive (hidden)';
+        if (contentType === 'image')
+            return '(image)';
+        return preview || '(empty)';
+    }
+
+    _menuRowMeta(contentType, detail1, detail2, timeStr) {
+        const parts = [timeStr];
+        if (contentType === 'image') {
+            if (detail1 > 0 && detail2 > 0)
+                parts.push(`${detail1}×${detail2}`);
+        } else if (detail1 > 0) {
+            parts.push(`${detail1.toLocaleString()} chars`);
+        }
+        return parts.join(' · ');
+    }
+
+    _addHistoryRow([entryId, contentType, preview, ts, flags, detail1,
+        detail2, imagePath]) {
+        const sensitive = Boolean(flags & ClipmanExtension.FLAG_SENSITIVE);
+        const pinned = Boolean(flags & ClipmanExtension.FLAG_PINNED);
+        const isImage = contentType === 'image';
+
         const item = new PopupMenu.PopupBaseMenuItem();
-        item.add_child(new St.Label({
-            text: isImage ? '(image)' : preview,
+        const row = new St.BoxLayout({
+            style: 'spacing: 12px;',
+            x_expand: true,
+        });
+
+        // Leading visual: real thumbnail for images (the daemon only
+        // sends a path it has verified to live inside its images dir;
+        // the shell runs as the same user, so the 0600 file is ours to
+        // read), otherwise a type/lock icon.
+        let lead;
+        if (imagePath) {
+            lead = new St.Icon({
+                gicon: new Gio.FileIcon(
+                    {file: Gio.File.new_for_path(imagePath)}),
+                icon_size: 28,
+                y_align: Clutter.ActorAlign.CENTER,
+            });
+        } else {
+            lead = new St.Icon({
+                icon_name: sensitive
+                    ? 'dialog-password-symbolic'
+                    : (isImage ? 'image-x-generic-symbolic'
+                        : 'edit-paste-symbolic'),
+                style_class: 'popup-menu-icon',
+                y_align: Clutter.ActorAlign.CENTER,
+            });
+        }
+        row.add_child(lead);
+
+        // Title + meta line, mirroring the window's preview/meta pair.
+        const column = new St.BoxLayout({
+            vertical: true,
             x_expand: true,
             y_align: Clutter.ActorAlign.CENTER,
+        });
+        const star = pinned ? '★ ' : '';
+        column.add_child(new St.Label({
+            text: star + this._menuRowTitle(preview, contentType, sensitive),
         }));
+        column.add_child(new St.Label({
+            text: this._menuRowMeta(
+                contentType, detail1, detail2, this._formatMenuTime(ts)),
+            style: 'font-size: 0.85em; opacity: 0.65;',
+        }));
+        row.add_child(column);
 
         // Delete affordance inside the row; stop the press AND release so
         // the item's own activate handler never fires.
@@ -436,8 +516,9 @@ export default class ClipmanExtension extends Extension {
         };
         trash.connect('button-press-event', onDelete);
         trash.connect('button-release-event', onDelete);
-        item.add_child(trash);
+        row.add_child(trash);
 
+        item.add_child(row);
         item.connect('activate', () => {
             this._callDaemon('ActivateEntry',
                 new GLib.Variant('(u)', [entryId]));
