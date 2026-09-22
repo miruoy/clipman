@@ -108,3 +108,24 @@ class ClipmanDBusService(dbus.service.Object):
             logger.debug("ActivateEntry: id %s not found", entry_id)
             return
         self.window._paste_entry(entry)
+
+    @dbus.service.method(IFACE, in_signature="", out_signature="")
+    def ClearHistory(self):
+        """Clear the unpinned history (shell menu footer action)."""
+        self.app.db.clear_unpinned()
+
+    @dbus.service.method(IFACE, in_signature="u", out_signature="")
+    def DeleteEntry(self, entry_id):
+        """Delete one history entry (shell menu per-row action)."""
+        self.app.db.delete_entry(entry_id)
+
+    @dbus.service.method(IFACE, in_signature="b", out_signature="")
+    def SetIncognito(self, paused):
+        """Flip the incognito state (shell menu footer toggle).
+
+        Goes through the monitor so the extension pause bridge fires the
+        same way it does from the popup's header toggle.
+        """
+        if self.monitor is None:
+            return
+        self.monitor.set_incognito(bool(paused))

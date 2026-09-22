@@ -133,6 +133,28 @@ class TestActivateEntry(_ServiceTestCase):
             ClipmanDBusService.ActivateEntry._dbus_out_signature, "")
 
 
+class TestMenuActions(_ServiceTestCase):
+    """Footer + per-row menu actions operate on the daemon's own state."""
+
+    def test_clear_history_clears_unpinned_entries(self):
+        self.app.db.add_entry("text", content_text="clip")
+        self.service.ClearHistory()
+        self.assertEqual(self.app.db.get_entries(), [])
+
+    def test_delete_entry_removes_one_row(self):
+        first = self.app.db.add_entry("text", content_text="one")
+        second = self.app.db.add_entry("text", content_text="two")
+        self.service.DeleteEntry(first)
+        remaining = self.app.db.get_entries()
+        self.assertEqual([e["id"] for e in remaining], [second])
+
+    def test_set_incognito_flips_the_monitor(self):
+        self.service.SetIncognito(True)
+        self.monitor.set_incognito.assert_called_once_with(True)
+        self.service.SetIncognito(False)
+        self.monitor.set_incognito.assert_called_with(False)
+
+
 class TestGetHistory(_ServiceTestCase):
     """GetHistory feeds the shell panel menu."""
 
