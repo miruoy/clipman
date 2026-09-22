@@ -40,3 +40,39 @@ class TestSetPaused(unittest.TestCase):
         with patch("clipman.shell_bridge.dbus.SessionBus",
                    side_effect=dbus.DBusException("no bus")):
             self.assertFalse(shell_bridge.set_paused(True))
+
+
+class TestToggleMenu(unittest.TestCase):
+    """toggle_menu opens/closes the shell panel menu from the daemon side."""
+
+    def _bus(self, owned=True):
+        bus = MagicMock()
+        bus.name_has_owner.return_value = owned
+        return bus
+
+    def test_calls_the_extension(self):
+        bus = self._bus()
+        iface = MagicMock()
+        with patch("clipman.shell_bridge.dbus.SessionBus", return_value=bus), \
+             patch("clipman.shell_bridge.dbus.Interface", return_value=iface):
+            self.assertTrue(shell_bridge.toggle_menu())
+        iface.ToggleMenu.assert_called_once_with()
+
+    def test_extension_absent(self):
+        with patch("clipman.shell_bridge.dbus.SessionBus",
+                   return_value=self._bus(owned=False)):
+            self.assertFalse(shell_bridge.toggle_menu())
+
+    def test_old_extension_without_the_method(self):
+        bus = self._bus()
+        iface = MagicMock()
+        iface.ToggleMenu.side_effect = dbus.DBusException(
+            "org.freedesktop.DBus.Error.UnknownMethod")
+        with patch("clipman.shell_bridge.dbus.SessionBus", return_value=bus), \
+             patch("clipman.shell_bridge.dbus.Interface", return_value=iface):
+            self.assertFalse(shell_bridge.toggle_menu())
+
+    def test_bus_unreachable(self):
+        with patch("clipman.shell_bridge.dbus.SessionBus",
+                   side_effect=dbus.DBusException("no bus")):
+            self.assertFalse(shell_bridge.toggle_menu())

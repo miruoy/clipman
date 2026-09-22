@@ -3,6 +3,8 @@ import logging
 import dbus
 import dbus.service
 
+import clipman.shell_bridge as shell_bridge
+
 BUS_NAME = "com.clipman.Daemon"
 OBJ_PATH = "/com/clipman/Daemon"
 IFACE = "com.clipman.Daemon"
@@ -55,7 +57,10 @@ class ClipmanDBusService(dbus.service.Object):
 
     @dbus.service.method(IFACE, in_signature="", out_signature="")
     def Toggle(self):
-        self.window.toggle()
+        """Show/hide the UI: the panel menu when the extension supports it,
+        otherwise the popup window."""
+        if not shell_bridge.toggle_menu():
+            self.window.toggle()
 
     @dbus.service.method(IFACE, in_signature="", out_signature="")
     def Show(self):

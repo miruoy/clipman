@@ -133,6 +133,23 @@ class TestActivateEntry(_ServiceTestCase):
             ClipmanDBusService.ActivateEntry._dbus_out_signature, "")
 
 
+class TestTogglePrefersTheMenu(_ServiceTestCase):
+    """Toggle opens the panel menu when the extension supports it."""
+
+    def test_menu_bridge_handled_the_toggle(self):
+        with patch("clipman.dbus_service.shell_bridge.toggle_menu",
+                   return_value=True) as toggle_menu:
+            self.service.Toggle()
+        toggle_menu.assert_called_once_with()
+        self.window.toggle.assert_not_called()
+
+    def test_window_fallback_when_the_extension_is_absent(self):
+        with patch("clipman.dbus_service.shell_bridge.toggle_menu",
+                   return_value=False):
+            self.service.Toggle()
+        self.window.toggle.assert_called_once_with()
+
+
 class TestMenuActions(_ServiceTestCase):
     """Footer + per-row menu actions operate on the daemon's own state."""
 

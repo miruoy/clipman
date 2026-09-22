@@ -39,3 +39,21 @@ def set_paused(paused):
     except dbus.DBusException as exc:
         logger.debug("SetPaused not accepted by the extension: %s", exc)
         return False
+
+
+def toggle_menu():
+    """Toggle the extension's panel dropdown menu.
+
+    Return True when the call succeeded. Extensions older than contract
+    version 9 have no ToggleMenu method; that returns False so the
+    caller can fall back to toggling the popup window.
+    """
+    iface = extension_iface()
+    if iface is None:
+        return False
+    try:
+        iface.ToggleMenu()
+        return True
+    except dbus.DBusException as exc:
+        logger.debug("ToggleMenu not accepted by the extension: %s", exc)
+        return False
