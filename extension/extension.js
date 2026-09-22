@@ -465,10 +465,13 @@ export default class ClipmanExtension extends Extension {
         // read), otherwise a type/lock icon.
         let lead;
         if (imagePath) {
+            // Both icon_size and CSS box: theme CSS can override either
+            // one alone, the thumbnail only comes out right with both.
             lead = new St.Icon({
                 gicon: new Gio.FileIcon(
                     {file: Gio.File.new_for_path(imagePath)}),
-                icon_size: 28,
+                icon_size: 96,
+                style: 'width: 96px; height: 96px;',
                 y_align: Clutter.ActorAlign.CENTER,
             });
         } else {
