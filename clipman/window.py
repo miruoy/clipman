@@ -2449,6 +2449,11 @@ class ClipmanWindow(Adw.ApplicationWindow):
 
         dialog.connect("closed", _closed)
 
+    def _grab_search_focus_once(self):
+        """One-shot idle target: focus the search entry, then stop."""
+        self.search_entry.grab_focus()
+        return False
+
     def _present_focused(self):
         """Show + focus the popup and (re)arm cursor positioning.
 
@@ -2463,7 +2468,9 @@ class ClipmanWindow(Adw.ApplicationWindow):
         # incognito is actually on.
         self._update_recording_pill(self._incognito_btn.get_active())
         # grab_focus no-ops on a not-yet-focused Wayland toplevel; defer.
-        GLib.idle_add(self.search_entry.grab_focus)
+        # One-shot idle: grab_focus() returns TRUE, so an idle_add of the
+        # bound method directly would reschedule forever (100% CPU spin).
+        GLib.idle_add(self._grab_search_focus_once)
         if self._cursor_move_id:
             GLib.source_remove(self._cursor_move_id)
         self._cursor_move_id = GLib.timeout_add(50, self._move_to_cursor)

@@ -281,6 +281,26 @@ class TestWindowConstruction(_WidgetTestCase):
         self.assertTrue(hasattr(window, "refresh"))
         self.assertTrue(hasattr(window, "refresh_update_banner"))
 
+    def test_present_focused_schedules_a_one_shot_focus_idle(self):
+        """The deferred focus idle must run exactly once, not busy-loop.
+
+        ``gtk_widget_grab_focus()`` returns ``TRUE``, so passing the
+        bound method straight to ``GLib.idle_add`` made the idle source
+        reschedule itself forever: the daemon pinned a full CPU core
+        from the first time the popup was shown until restart. The
+        callback must return a falsy value so GLib removes the source.
+        """
+        from clipman.window import ClipmanWindow
+
+        db = self._make_db()
+        app = self._make_app("com.clipman.TestFocusIdle")
+        window = ClipmanWindow(application=app, db=db, monitor=None)
+
+        with patch("clipman.window.GLib.idle_add") as idle_add:
+            window._present_focused()
+        callback = idle_add.call_args[0][0]
+        self.assertFalse(callback())
+
     def test_incognito_toggle_syncs_monitor_button_and_pill(self):
         """set_incognito drives the monitor, header button and footer pill.
 

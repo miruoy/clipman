@@ -4,6 +4,18 @@ All notable changes to Clipman are documented in this file.
 
 ## [Unreleased]
 
+### Fixed — daemon busy-looped at ~100% CPU after showing the popup
+
+- `ClipmanWindow._present_focused()` handed
+  `search_entry.grab_focus` straight to `GLib.idle_add()`. GTK's
+  `gtk_widget_grab_focus()` returns `TRUE`, and a GLib idle callback
+  that returns a truthy value is rescheduled, so the source ran
+  forever: from the first time the popup was shown until the daemon
+  was restarted, the process spun on a full CPU core while doing
+  nothing visible. The deferred focus now goes through a one-shot
+  idle callback that returns `False`, and a regression test pins the
+  callback's return value.
+
 ### Added — developer tooling
 
 - `scripts/deps.sh`: one manifest of system packages (`runtime`, `test`,
