@@ -17,44 +17,48 @@ const SETTING_DEFAULTS = {
     sensitive_timeout: 30,
 };
 
-export default GObject.registerClass(
-class ClipmanPreferencesWindow extends Adw.PreferencesWindow {
-    constructor(metadata) {
+// GNOME Shell (45+) instantiates its own Adw.PreferencesWindow and hands
+// it to fillPreferencesWindow(); everything we build must be a page
+// inside that window.
+export function init() {}
+
+export function fillPreferencesWindow(window) {
+    window.add(new ClipmanPreferencesPage());
+}
+
+const ClipmanPreferencesPage = GObject.registerClass(
+class ClipmanPreferencesPage extends Adw.PreferencesPage {
+    constructor() {
         super({
-            title: 'Clipman',
-            modal: true,
-            search_enabled: true,
+            title: 'General',
+            icon_name: 'edit-paste-symbolic',
         });
-        this._metadata = metadata;
         this._daemonAvailable = false;
 
-        const page = new Adw.PreferencesPage();
-        this.add(page);
-
         // --- History ---------------------------------------------------
-        const historyGroup = new Adw.PreferencesGroup({
+        this._historyGroup = new Adw.PreferencesGroup({
             title: 'History',
             description: 'What the panel menu and popup window show.',
         });
-        page.add(historyGroup);
+        this.add(this._historyGroup);
 
         this._menuLimitRow = Adw.SpinRow.new_with_range(1, 100, 1);
         this._menuLimitRow.title = 'Panel menu size';
         this._menuLimitRow.subtitle =
             'Number of items shown in the top-bar dropdown';
-        historyGroup.add(this._menuLimitRow);
+        this._historyGroup.add(this._menuLimitRow);
 
         this._badgesRow = new Adw.SwitchRow({
             title: 'Count badges',
             subtitle: 'Show the entry count next to section headers',
         });
-        historyGroup.add(this._badgesRow);
+        this._historyGroup.add(this._badgesRow);
 
         // --- Privacy ---------------------------------------------------
         const privacyGroup = new Adw.PreferencesGroup({
             title: 'Privacy',
         });
-        page.add(privacyGroup);
+        this.add(privacyGroup);
 
         this._incognitoRow = new Adw.SwitchRow({
             title: 'Start in incognito mode',
@@ -188,11 +192,13 @@ class ClipmanPreferencesWindow extends Adw.PreferencesWindow {
     }
 
     _markDaemonUnavailable() {
-        const banner = new Adw.Banner({
+        // Adw.Banner is not allowed inside a PreferencesPage/Group; an
+        // ActionRow carries the same warning.
+        const warning = new Adw.ActionRow({
             title: 'Clipman daemon is not running — settings cannot be loaded',
-            button_label: '',
         });
-        this.add(banner);
+        warning.add_css_class('warning');
+        this._historyGroup.add(warning);
         for (const row of [
             this._menuLimitRow,
             this._badgesRow,

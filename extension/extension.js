@@ -322,7 +322,7 @@ export default class ClipmanExtension extends Extension {
 
     _buildIndicator() {
         this._indicator = new PanelMenu.Button(0.0, 'clipman', false);
-        this._indicator.add_actor(new St.Icon({
+        this._indicator.add_child(new St.Icon({
             icon_name: 'edit-paste-symbolic',
             style_class: 'system-status-icon',
         }));
