@@ -58,9 +58,18 @@ class TestClipboardDB(unittest.TestCase):
     def test_add_invalid_entry(self):
         result = self.db.add_entry("text")  # no content_text
         self.assertEqual(result, -1)
-
         result = self.db.add_entry("image")  # no image_data
         self.assertEqual(result, -1)
+
+    def test_get_entry_returns_single_row(self):
+        entry_id = self.db.add_entry("text", content_text="pick me")
+        entry = self.db.get_entry(entry_id)
+        self.assertEqual(entry["id"], entry_id)
+        self.assertEqual(entry["content_text"], "pick me")
+        self.assertEqual(entry["content_type"], "text")
+
+    def test_get_entry_missing_id_returns_none(self):
+        self.assertIsNone(self.db.get_entry(424242))
 
     def test_duplicate_text_updates_timestamp(self):
         self.db.add_entry("text", content_text="duplicate")

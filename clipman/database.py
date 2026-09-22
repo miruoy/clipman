@@ -183,6 +183,14 @@ class ClipboardDB:
             ).fetchall()
         return [dict(r) for r in rows]
 
+    def get_entry(self, entry_id: int):
+        """Fetch a single entry as a dict (same shape as get_entries rows),
+        or None when the id does not exist."""
+        row = self.conn.execute(
+            "SELECT * FROM entries WHERE id = ?", (entry_id,)
+        ).fetchone()
+        return dict(row) if row else None
+
     def count_entries(self, content_type: str = None) -> int:
         if content_type:
             row = self.conn.execute(
