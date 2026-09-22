@@ -4,6 +4,24 @@ All notable changes to Clipman are documented in this file.
 
 ## [Unreleased]
 
+### Added — panel-menu UI (GNOME top-bar dropdown)
+
+- The GNOME Shell extension now adds a permanent panel indicator whose
+  dropdown lists the recent clipboard history: one-line text previews
+  (or an image placeholder), click to paste into the focused window,
+  a per-row delete button, and footer actions for incognito, clear
+  history and preferences. Rows are refetched from the daemon on every
+  open; the daemon owns the row limit and all state, the menu is a
+  thin view.
+- New daemon D-Bus methods backing the menu: `GetHistory`,
+  `ActivateEntry`, `DeleteEntry`, `ClearHistory` and `SetIncognito`.
+- The `Toggle` action (Super+V / `clipman toggle`) now opens the panel
+  menu via a new authorized extension `ToggleMenu` method (contract
+  version 9) and falls back to the popup window when the extension
+  lacks it. The window remains the preferences/management UI.
+- `Panel menu history size` preference (1–100, default 30) controls
+  how many rows the dropdown lists.
+
 ### Fixed — daemon busy-looped at ~100% CPU after showing the popup
 
 - `ClipmanWindow._present_focused()` handed
