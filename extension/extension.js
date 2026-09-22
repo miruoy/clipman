@@ -4,6 +4,9 @@ import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Shell from 'gi://Shell';
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
+import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 // The popup's Wayland app_id / wm_class (clipman/app.py application_id).
@@ -39,6 +42,7 @@ const PASTE_DBUS_IFACE = `
     <method name="SetPaused">
       <arg type="b" direction="in" name="paused"/>
     </method>
+    <method name="ToggleMenu"/>
   </interface>
 </node>`;
 
@@ -107,6 +111,8 @@ export default class ClipmanExtension extends Extension {
         // alt-tab and dash lists instead.
         if (!Meta.Window.prototype.hide_from_window_list)
             this._installWindowListPatches();
+
+        this._buildIndicator();
     }
 
     disable() {
@@ -139,6 +145,12 @@ export default class ClipmanExtension extends Extension {
         this._daemonPid = 0;
         this._deniedSenders.clear();
         this._virtualKeyboard = null;
+        if (this._indicator) {
+            this._indicator.destroy();
+            this._indicator = null;
+            this._historySection = null;
+            this._incognitoItem = null;
+        }
     }
 
     // ---- Window list patches (GNOME 45 to 48) -------------------------
@@ -296,6 +308,163 @@ export default class ClipmanExtension extends Extension {
             this._clipboardTimeout = null;
         }
         invocation.return_value(null);
+    }
+
+    ToggleMenuAsync(_params, invocation) {
+        if (!this._authorize(invocation))
+            return;
+        if (this._indicator)
+            this._indicator.menu.toggle();
+        invocation.return_value(null);
+    }
+
+    // ---- Panel indicator + dropdown menu ------------------------------
+
+    _buildIndicator() {
+        this._indicator = new PanelMenu.Button(0.0, 'clipman', false);
+        this._indicator.add_actor(new St.Icon({
+            icon_name: 'edit-paste-symbolic',
+            style_class: 'system-status-icon',
+        }));
+
+        // History rows live in a scrollable section rebuilt on every open
+        // (the row count is a daemon-side setting; the menu just displays).
+        this._historySection = new PopupMenu.PopupMenuSection();
+        const scroll = new St.ScrollView({
+            overlay_scrollbars: true,
+            style: 'max-height: 384px;',
+        });
+        scroll.add_child(this._historySection.actor);
+        const scrollSection = new PopupMenu.PopupMenuSection();
+        scrollSection.actor.add_child(scroll);
+        this._indicator.menu.addMenuItem(scrollSection);
+
+        const separator = new PopupMenu.PopupSeparatorMenuItem();
+        this._indicator.menu.addMenuItem(separator);
+
+        // The daemon mirrors incognito changes back via SetPaused, so
+        // _paused already tracks the real state across both UIs.
+        this._incognitoItem = new PopupMenu.PopupSwitchMenuItem(
+            'Incognito', this._paused, {reactive: true});
+        this._incognitoItem.connect('toggled', (item, state) => {
+            this._paused = state;
+            this._callDaemon('SetIncognito', new GLib.Variant('(b)', [state]));
+        });
+        this._indicator.menu.addMenuItem(this._incognitoItem);
+
+        const clearItem = new PopupMenu.PopupMenuItem('Clear history');
+        clearItem.connect('activate', () => {
+            this._historySection.removeAll();
+            this._callDaemon('ClearHistory', null);
+        });
+        this._indicator.menu.addMenuItem(clearItem);
+
+        const prefsItem = new PopupMenu.PopupMenuItem('Preferences');
+        prefsItem.connect('activate', () => {
+            this._callDaemon('Show', null);
+        });
+        this._indicator.menu.addMenuItem(prefsItem);
+
+        this._indicator.menu.connect('open-state-changed', (_menu, open) => {
+            if (open)
+                this._refreshHistory();
+        });
+
+        Main.panel.addToStatusArea('clipman', this._indicator);
+    }
+
+    _refreshHistory() {
+        this._historySection.removeAll();
+        Gio.DBus.session.call(
+            DAEMON_BUS_NAME,
+            DAEMON_OBJECT_PATH,
+            DAEMON_BUS_NAME,
+            'GetHistory',
+            null,
+            new GLib.VariantType('(a(ibss))'),
+            Gio.DBusCallFlags.NO_AUTO_START,
+            -1,
+            null,
+            (connection, result) => {
+                if (this._destroyed)
+                    return;
+                try {
+                    const [rows] =
+                        connection.call_finish(result).deepUnpack();
+                    if (rows.length === 0)
+                        this._addDisabledRow('No clipboard history yet');
+                    for (const row of rows)
+                        this._addHistoryRow(row);
+                    if (this._incognitoItem)
+                        this._incognitoItem.setToggleState(this._paused);
+                } catch (e) {
+                    if (this._destroyed)
+                        return;
+                    console.debug(`clipman: GetHistory failed: ${e.message}`);
+                    this._addDisabledRow('Clipman daemon not running');
+                }
+            }
+        );
+    }
+
+    _addDisabledRow(label) {
+        const item = new PopupMenu.PopupMenuItem(label, {reactive: false});
+        this._historySection.addMenuItem(item);
+    }
+
+    _addHistoryRow([entryId, isImage, preview, _contentType]) {
+        const item = new PopupMenu.PopupBaseMenuItem();
+        item.add_child(new St.Label({
+            text: isImage ? '(image)' : preview,
+            x_expand: true,
+            y_align: Clutter.ActorAlign.CENTER,
+        }));
+
+        // Delete affordance inside the row; stop the press AND release so
+        // the item's own activate handler never fires.
+        const trash = new St.Icon({
+            icon_name: 'edit-delete-symbolic',
+            style_class: 'popup-menu-icon',
+            reactive: true,
+            can_focus: true,
+            track_hover: true,
+        });
+        const onDelete = () => {
+            this._callDaemon('DeleteEntry', new GLib.Variant('(u)', [entryId]));
+            item.destroy();
+            return Clutter.EVENT_STOP;
+        };
+        trash.connect('button-press-event', onDelete);
+        trash.connect('button-release-event', onDelete);
+        item.add_child(trash);
+
+        item.connect('activate', () => {
+            this._callDaemon('ActivateEntry',
+                new GLib.Variant('(u)', [entryId]));
+        });
+        this._historySection.addMenuItem(item);
+    }
+
+    _callDaemon(method, variant) {
+        Gio.DBus.session.call(
+            DAEMON_BUS_NAME,
+            DAEMON_OBJECT_PATH,
+            DAEMON_BUS_NAME,
+            method,
+            variant,
+            null,
+            Gio.DBusCallFlags.NO_AUTO_START,
+            -1,
+            null,
+            (connection, result) => {
+                try {
+                    connection.call_finish(result);
+                } catch (e) {
+                    console.debug(
+                        `clipman: ${method} not delivered: ${e.message}`);
+                }
+            }
+        );
     }
 
     // ---- Paste -------------------------------------------------------
